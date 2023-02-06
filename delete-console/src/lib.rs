@@ -18,15 +18,13 @@ impl VisitMut for TransformVisitor {
             Stmt::Expr(exprStmt) => match &*exprStmt.expr {
                 Expr::Call(call) => match &call.callee {
                     Callee::Expr(callee_expr) => match &**callee_expr {
-                        Expr::Ident(ident) => {}
-                        Expr::Member(member) => match &*member.obj {
-                            Expr::Ident(ident) => {
+                        Expr::Member(member) => {
+                            if let Expr::Ident(ident) = &*member.obj {
                                 if ident.sym.eq("console".into()) {
                                     n.take();
                                 }
                             }
-                            _ => {}
-                        },
+                        }
                         _ => {}
                     },
                     _ => {}
