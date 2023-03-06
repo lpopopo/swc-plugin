@@ -3,7 +3,8 @@ name = "delete_console"
 version = "0.1.0"
 edition = "2021"
 authors = ["lpopopo <2403164743@qq.com>"]
-
+description="swc plugin delete console"
+license = "MIT OR Apache-2.0"
 [lib]
 crate-type = ["cdylib", "rlib"]
 
