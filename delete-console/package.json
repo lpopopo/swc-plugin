@@ -1,13 +1,13 @@
 {
-    "name": "swc-plugin-test",
+    "name": "swc-plugin-delete-console",
     "version": "0.1.0",
     "description": "",
     "author": "",
     "license": "ISC",
     "keywords": ["swc-plugin"],
-    "main": "target/wasm32-wasi/release/swc-plugin-test.wasm",
+    "main": "target/wasm32-unknown-unknown/release/swc-plugin-delete_console.wasm",
     "scripts": {
-        "prepublishOnly": "cargo build-wasi --release"
+        "prepack": "cargo prepublish --release && cp target/wasm32-unknown-unknown/release/swc-plugin-delete_console.wasm ."
     },
     "files": []
 }

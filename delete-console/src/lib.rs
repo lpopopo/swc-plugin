@@ -40,12 +40,6 @@ impl VisitMut for TransformVisitor {
         // We do same thing here.
         stmts.retain(|s| !matches!(s, Stmt::Empty(..)));
     }
-    fn visit_mut_module_items(&mut self, stmts: &mut Vec<ModuleItem>) {
-        stmts.visit_mut_children_with(self);
-
-        // We do same thing here.
-        stmts.retain(|s| !matches!(s, ModuleItem::Stmt(Stmt::Empty(..))));
-    }
 }
 
 /// An example plugin function with macro support.
