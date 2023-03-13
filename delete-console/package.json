@@ -5,9 +5,9 @@
     "author": "",
     "license": "ISC",
     "keywords": ["swc-plugin"],
-    "main": "target/wasm32-unknown-unknown/release/swc-plugin-delete_console.wasm",
+    "main": "./delete_console.wasm",
     "scripts": {
-        "prepack": "cargo prepublish --release && cp target/wasm32-unknown-unknown/release/swc-plugin-delete_console.wasm ."
+        "prepack": "cargo build-wasm32 --release && cp target/wasm32-unknown-unknown/release/delete_console.wasm ."
     },
     "files": []
 }
