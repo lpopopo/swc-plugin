@@ -23,8 +23,15 @@ strip = "symbols"
 
 [dependencies]
 serde = "1"
-swc_core = { version = "0.44.*", features = ["plugin_transform"] }
-swc_plugin_loadable_components = "0.3.0"
+swc_core = { version = "0.59.14", features = [
+     "common",
+     "ecma_ast",
+     "ecma_plugin_transform",
+     "ecma_parser",
+     "ecma_minifier",
+     "ecma_utils",
+     "ecma_visit",
+] }
 testing = "0.31.31"
 wasm-bindgen = "0.2"
 

@@ -1,13 +1,15 @@
 {
     "name": "swc-plugin-delete-console",
-    "version": "0.1.0",
+    "version": "0.3.0",
     "description": "",
     "author": "",
     "license": "ISC",
-    "keywords": ["swc-plugin"],
-    "main": "./delete_console.wasm",
+    "keywords": [
+        "swc-plugin"
+    ],
+    "main": "delete_console.wasm",
     "scripts": {
-        "prepack": "cargo build-wasm32 --release && cp target/wasm32-unknown-unknown/release/delete_console.wasm ."
+        "prepack": "cargo build-wasm32 --release && cp target/wasm32-wasi/release/delete_console.wasm ."
     },
     "files": []
 }

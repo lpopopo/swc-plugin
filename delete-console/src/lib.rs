@@ -14,6 +14,7 @@ impl VisitMut for TransformVisitor {
     // https://rustdoc.swc.rs/swc_ecma_visit/trait.VisitMut.html
     fn visit_mut_stmt(&mut self, n: &mut Stmt) {
         n.visit_mut_children_with(self);
+
         match n {
             Stmt::Expr(exprStmt) => match &*exprStmt.expr {
                 Expr::Call(call) => match &call.callee {
