@@ -1,3 +1,6 @@
+// #![allow(clippy::not_unsafe_ptr_arg_deref)]
+// #![feature(box_patterns)]
+
 use swc_core::plugin::{plugin_transform, proxies::TransformPluginProgramMetadata};
 use swc_core::{
     common::util::take::Take,
@@ -13,6 +16,7 @@ impl VisitMut for TransformVisitor {
     // A comprehensive list of possible visitor methods can be found here:
     // https://rustdoc.swc.rs/swc_ecma_visit/trait.VisitMut.html
     fn visit_mut_stmt(&mut self, n: &mut Stmt) {
+        println!("delete console swc plugin start\n\n");
         n.visit_mut_children_with(self);
 
         match n {
