@@ -1,6 +1,3 @@
-// #![allow(clippy::not_unsafe_ptr_arg_deref)]
-// #![feature(box_patterns)]
-
 use swc_core::plugin::{plugin_transform, proxies::TransformPluginProgramMetadata};
 use swc_core::{
     common::util::take::Take,
