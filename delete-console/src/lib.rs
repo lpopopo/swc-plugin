@@ -13,27 +13,24 @@ impl VisitMut for TransformVisitor {
     // A comprehensive list of possible visitor methods can be found here:
     // https://rustdoc.swc.rs/swc_ecma_visit/trait.VisitMut.html
     fn visit_mut_stmt(&mut self, n: &mut Stmt) {
-        println!("delete console swc plugin start\n\n");
         n.visit_mut_children_with(self);
 
-        match n {
-            Stmt::Expr(exprStmt) => match &*exprStmt.expr {
-                Expr::Call(call) => match &call.callee {
-                    Callee::Expr(callee_expr) => match &**callee_expr {
-                        Expr::Member(member) => {
-                            if let Expr::Ident(ident) = &*member.obj {
-                                if ident.sym.eq("console".into()) {
-                                    n.take();
+        if let Stmt::Expr(expr_stmt) = n {
+            if let Expr::Call(call) = &*expr_stmt.expr {
+                if let Callee::Expr(callee_expr) = &call.callee {
+                    if let Expr::Member(member) = &**callee_expr {
+                        if let Expr::Ident(indet) = &*member.obj {
+                            print!("Stmt Ident is {}\n", indet);
+                            if indet.sym.eq("console".into()) {
+                                if let MemberProp::Ident(m_ident) = &member.prop {
+                                    print!("Stmt MemberProp  indent is {}\n", m_ident);
                                 }
+                                n.take();
                             }
                         }
-                        _ => {}
-                    },
-                    _ => {}
-                },
-                _ => {}
-            },
-            _ => {}
+                    }
+                }
+            }
         }
     }
     fn visit_mut_stmts(&mut self, stmts: &mut Vec<Stmt>) {
@@ -41,6 +38,15 @@ impl VisitMut for TransformVisitor {
 
         // We do same thing here.
         stmts.retain(|s| !matches!(s, Stmt::Empty(..)));
+    }
+    fn visit_mut_module_items(&mut self, stmts: &mut Vec<ModuleItem>) {
+        stmts.visit_mut_children_with(self);
+
+        // This is also required, because top-level statements are stored in `Vec<ModuleItem>`.
+        stmts.retain(|s| {
+            // We use `matches` macro as this match is trivial.
+            !matches!(s, ModuleItem::Stmt(Stmt::Empty(..)))
+        });
     }
 }
 

@@ -10,7 +10,8 @@
     "main": "delete_console.wasm",
     "scripts": {
         "prepack": "cargo build-wasi --release && cp target/wasm32-wasi/release/delete_console.wasm .",
-        "push" : "npm publish"
+        "push" : "npm publish", 
+        "test": "cargo test -- --nocapture"
     },
     "files": []
 }
