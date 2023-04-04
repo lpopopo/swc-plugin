@@ -22,7 +22,8 @@ strip = "symbols"
 
 
 [dependencies]
-serde = "1"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 swc_common = {version = "0.29.37", features = ["concurrent"]}
 swc_core = { version = "0.69.0", features = [
      "common",
@@ -34,6 +35,7 @@ swc_core = { version = "0.69.0", features = [
 ] }
 testing = "0.31.39"
 tracing = {version = "0.1.37", features = ["release_max_level_off"]}
+glob = "0.3.1"
 # wasm-bindgen = "0.2"
 
 

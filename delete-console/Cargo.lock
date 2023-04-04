@@ -239,7 +239,9 @@ dependencies = [
 name = "delete_console"
 version = "0.1.0"
 dependencies = [
+ "glob",
  "serde",
+ "serde_json",
  "swc_common",
  "swc_core",
  "testing",

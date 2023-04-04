@@ -1,3 +1,5 @@
+use glob::glob;
+use swc_common::plugin::metadata::TransformPluginMetadataContextKind;
 use swc_core::plugin::{plugin_transform, proxies::TransformPluginProgramMetadata};
 use swc_core::{
     common::util::take::Take,
@@ -6,8 +8,44 @@ use swc_core::{
         visit::{as_folder, FoldWith, VisitMut, VisitMutWith},
     },
 };
+mod config;
+pub use config::{parse_config, Config, ConfigFile};
 
-pub struct TransformVisitor;
+pub struct TransformVisitor {
+    pub config: Config,
+    pub file_name: Option<String>,
+}
+
+impl TransformVisitor {
+    pub fn new(config: Config, file_name: Option<String>) -> Self {
+        TransformVisitor { config, file_name }
+    }
+}
+
+fn stmt_delete_console(n: &mut Stmt, config: Config) {
+    if let Stmt::Expr(expr_stmt) = n {
+        if let Expr::Call(call) = &*expr_stmt.expr {
+            if let Callee::Expr(callee_expr) = &call.callee {
+                if let Expr::Member(member) = &**callee_expr {
+                    if let Expr::Ident(indet) = &*member.obj {
+                        print!("Stmt Ident is {}\n", indet);
+                        if indet.sym.eq("console".into()) {
+                            print!("delete console config is {:?}\n", config);
+                            if let MemberProp::Ident(m_ident) = &member.prop {
+                                if config.includes().contains(&m_ident.sym) {
+                                    n.take();
+                                } else if !config.excludes().contains(&m_ident.sym) {
+                                    n.take();
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 impl VisitMut for TransformVisitor {
     // Implement necessary visit_mut_* methods for actual custom transform.
     // A comprehensive list of possible visitor methods can be found here:
@@ -15,20 +53,18 @@ impl VisitMut for TransformVisitor {
     fn visit_mut_stmt(&mut self, n: &mut Stmt) {
         n.visit_mut_children_with(self);
 
-        if let Stmt::Expr(expr_stmt) = n {
-            if let Expr::Call(call) = &*expr_stmt.expr {
-                if let Callee::Expr(callee_expr) = &call.callee {
-                    if let Expr::Member(member) = &**callee_expr {
-                        if let Expr::Ident(indet) = &*member.obj {
-                            print!("Stmt Ident is {}\n", indet);
-                            if indet.sym.eq("console".into()) {
-                                if let MemberProp::Ident(m_ident) = &member.prop {
-                                    print!("Stmt MemberProp  indent is {}\n", m_ident);
-                                }
-                                n.take();
+        for file_include_rule in self.config.file().includes.clone() {
+            for path in glob(&file_include_rule).unwrap() {
+                print!("file config is {:?}\n", path);
+                match path {
+                    Ok(path) => {
+                        if let Some(name) = self.file_name.clone() {
+                            if name.contains(path.to_str().unwrap()) {
+                                stmt_delete_console(n, self.config.clone());
                             }
                         }
                     }
+                    Err(e) => println!("delete console plugin file include error {:?}", e),
                 }
             }
         }
@@ -67,7 +103,14 @@ impl VisitMut for TransformVisitor {
 /// Refer swc_plugin_macro to see how does it work internally.
 #[plugin_transform]
 pub fn process_transform(program: Program, _metadata: TransformPluginProgramMetadata) -> Program {
-    program.fold_with(&mut as_folder(TransformVisitor))
+    let config = parse_config(
+        &_metadata
+            .get_transform_plugin_config()
+            .expect("load plugin config failed"),
+    );
+    let file_name = _metadata.get_context(&TransformPluginMetadataContextKind::Filename);
+    println!("file_name is {:?}", file_name);
+    program.fold_with(&mut as_folder(TransformVisitor::new(config, file_name)))
 }
 
 // An example to test plugin transform.
