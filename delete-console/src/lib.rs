@@ -1,12 +1,12 @@
 use glob::glob;
 use swc_common::plugin::metadata::TransformPluginMetadataContextKind;
-use swc_core::plugin::{plugin_transform, proxies::TransformPluginProgramMetadata};
 use swc_core::{
     common::util::take::Take,
     ecma::{
         ast::*,
         visit::{as_folder, FoldWith, VisitMut, VisitMutWith},
     },
+    plugin::{plugin_transform, proxies::TransformPluginProgramMetadata},
 };
 mod config;
 pub use config::{parse_config, Config, ConfigFile};
@@ -69,16 +69,19 @@ impl VisitMut for TransformVisitor {
             }
         }
     }
+
     fn visit_mut_stmts(&mut self, stmts: &mut Vec<Stmt>) {
         stmts.visit_mut_children_with(self);
 
         // We do same thing here.
         stmts.retain(|s| !matches!(s, Stmt::Empty(..)));
     }
+
     fn visit_mut_module_items(&mut self, stmts: &mut Vec<ModuleItem>) {
         stmts.visit_mut_children_with(self);
 
-        // This is also required, because top-level statements are stored in `Vec<ModuleItem>`.
+        // This is also required, because top-level statements are stored in
+        // `Vec<ModuleItem>`.
         stmts.retain(|s| {
             // We use `matches` macro as this match is trivial.
             !matches!(s, ModuleItem::Stmt(Stmt::Empty(..)))
@@ -115,8 +118,8 @@ pub fn process_transform(program: Program, _metadata: TransformPluginProgramMeta
 
 // An example to test plugin transform.
 // Recommended strategy to test plugin's transform is verify
-// the Visitor's behavior, instead of trying to run `process_transform` with mocks
-// unless explicitly required to do so.
+// the Visitor's behavior, instead of trying to run `process_transform` with
+// mocks unless explicitly required to do so.
 // test!(
 //     Default::default(),
 //     |_| as_folder(TransformVisitor),
