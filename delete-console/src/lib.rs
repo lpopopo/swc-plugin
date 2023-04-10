@@ -1,4 +1,3 @@
-use glob::glob;
 use swc_common::plugin::metadata::TransformPluginMetadataContextKind;
 use swc_core::{
     common::util::take::Take,
@@ -9,7 +8,9 @@ use swc_core::{
     plugin::{plugin_transform, proxies::TransformPluginProgramMetadata},
 };
 mod config;
+mod file;
 pub use config::{parse_config, Config, ConfigFile};
+pub use file::file_check;
 
 pub struct TransformVisitor {
     pub config: Config,
@@ -54,17 +55,12 @@ impl VisitMut for TransformVisitor {
         n.visit_mut_children_with(self);
 
         for file_include_rule in self.config.file().includes.clone() {
-            for path in glob(&file_include_rule).unwrap() {
-                print!("file config is {:?}\n", path);
-                match path {
-                    Ok(path) => {
-                        if let Some(name) = self.file_name.clone() {
-                            if name.contains(path.to_str().unwrap()) {
-                                stmt_delete_console(n, self.config.clone());
-                            }
-                        }
-                    }
-                    Err(e) => println!("delete console plugin file include error {:?}", e),
+            if let Some(file_name) = &self.file_name {
+                if file_check(
+                    file_include_rule.as_ref().to_string(),
+                    file_name.to_string(),
+                ) {
+                    stmt_delete_console(n, self.config.clone())
                 }
             }
         }

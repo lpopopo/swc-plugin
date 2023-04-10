@@ -1,6 +1,6 @@
-use delete_console::TransformVisitor;
-use delete_console::{Config, ConfigFile};
 use std::path::PathBuf;
+
+use delete_console::{Config, ConfigFile, TransformVisitor};
 use swc_core::ecma::{transforms::testing::test_fixture, visit::as_folder};
 
 #[testing::fixture("tests/fixture/**/input.js")]

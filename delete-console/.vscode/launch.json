@@ -1,0 +1,65 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'delete_console'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=delete_console"
+                ],
+                "filter": {
+                    "name": "delete_console",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'fixture'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=fixture",
+                    "--package=delete_console"
+                ],
+                "filter": {
+                    "name": "fixture",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'file-path'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=file-path",
+                    "--package=delete_console"
+                ],
+                "filter": {
+                    "name": "file-path",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}
