@@ -12,13 +12,13 @@ fn file_path_include() {
                 // "**/tests/*.js".into(),
                 // "tests/**/*.js".into(),
                 // "*/tests/**/*.js".into(),
-                "**/tests/**/console/*.js".into(),
+                "**/tests/**/*.js".into(),
             ],
             vec![],
         ),
     );
-    let test_file_path = "/Users/liushuai/Desktop/study/rust/swc_plugin/delete-console/tests/\
-                          fixture/console/input.js";
+    let test_file_path =
+        "/Users/liushuai/Desktop/study/rust/swc_plugin/delete-console/tests/input.js";
     for rule_includes in test_config.file().includes.clone() {
         println!(
             "file check rule: {}   reslut------> {}",
