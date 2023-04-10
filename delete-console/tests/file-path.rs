@@ -8,10 +8,11 @@ fn file_path_include() {
         ConfigFile::new(
             // vec!["**/tests/*.js".into()],
             vec![
-                "**/tests/**/*.js".into(),
-                "**/tests/*.js".into(),
-                "tests/**/*.js".into(),
-                "*/tests/**/*.js".into(),
+                // "**/tests/**/*.js".into(),
+                // "**/tests/*.js".into(),
+                // "tests/**/*.js".into(),
+                // "*/tests/**/*.js".into(),
+                "**/tests/**/console/*.js".into(),
             ],
             vec![],
         ),

@@ -39,7 +39,7 @@ pub fn file_check(rule: String, path: String) -> bool {
     }
     if rule_index < rule_vec.len() {
         if let Some(extions) = file_extions {
-            if path_index < path_buf.len() || !path.ends_with(extions) {
+            if path_index < path_buf.len() - 1 || !path.ends_with(extions) {
                 res = false;
             }
         } else {
