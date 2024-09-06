@@ -1,9 +1,11 @@
 use core::fmt;
+use std::borrow::{Borrow, BorrowMut};
 
 use swc_common::SyntaxContext;
 use swc_common::{plugin::metadata::TransformPluginMetadataContextKind, Spanned};
 use swc_core::atoms::Atom;
 use swc_core::common::{Span, DUMMY_SP};
+use swc_core::ecma::ast;
 use swc_core::ecma::atoms::JsWord;
 use swc_core::{
     common::util::take::Take,
@@ -29,110 +31,68 @@ impl VisitMut for TransformVisitor {
         if let Callee::Expr(boxed_callee) = &mut call_expr.callee {
             if let Expr::Member(MemberExpr { obj, prop, .. }) = &mut **boxed_callee {
                 if let MemberProp::Ident(IdentName { sym, .. }) = prop {
-                    let last_then = find_last_then(call_expr);
+                    if let Expr::Call(next_call_expr) = &mut **obj {
+                        println!("next_call_expr   {:?}========>\n\n", next_call_expr);
+                        if sym == "then" && !Some(next_call_expr).is_some() {
+                            let catch_func = create_catch_arrow_func();
 
-                    if let Some(last_then) = last_then {
-                        // Create the catch function
-                        let catch_func = create_catch_arrow_func();
-
-                        // Add the catch function to the end of the chain
-                        let catch_expr = CallExpr {
-                            callee: Callee::Expr(Box::new(Expr::Member(MemberExpr {
-                                span: DUMMY_SP, // Adjust the span as needed
-                                obj: Box::new(Expr::Call(CallExpr {
-                                    callee: Callee::Expr(Box::new(Expr::Ident(
-                                        Ident {
-                                            span: DUMMY_SP,
-                                            sym: "catch".into(),
-                                            ctxt: SyntaxContext::empty(),
-                                            optional: false,
-                                        }
-                                        .into(),
-                                    ))),
-                                    args: vec![catch_func.clone().into()],
-                                    type_args: None,
-                                    ctxt: SyntaxContext::empty(),
+                            let catch_expr = CallExpr {
+                                callee: Callee::Expr(Box::new(Expr::Member(MemberExpr {
                                     span: DUMMY_SP,
-                                })),
-                                prop: MemberProp::Ident(IdentName {
-                                    span: DUMMY_SP,
-                                    sym: "catch".into(),
-                                }),
-                            }))),
-                            args: vec![catch_func.clone().into()],
-                            type_args: None,
-                            ctxt: SyntaxContext::empty(),
-                            span: DUMMY_SP,
-                        };
-                        *last_then = catch_expr;
-                    }
-                }
-            }
-        }
-    }
-}
-
-fn find_last_then<'a>(call_expr: &'a mut CallExpr) -> Option<&'a mut CallExpr> {
-    let mut current_expr: Option<&'a mut CallExpr> = Some(call_expr);
-    let mut last_then_expr: Option<&'a mut CallExpr> = None;
-
-    // 遍历找到最后的 then
-    while let Some(expr) = current_expr {
-        // 提取 callee 的不可变引用并判断是否是 then
-        let is_then = {
-            let callee = &mut expr.callee;
-            if let Callee::Expr(boxed_callee) = callee {
-                if let Expr::Member(MemberExpr { prop, .. }) = &**boxed_callee {
-                    if let MemberProp::Ident(IdentName { sym, .. }) = prop {
-                        sym == &JsWord::from("then")
-                    } else {
-                        false
-                    }
-                } else {
-                    false
-                }
-            } else {
-                false
-            }
-        };
-
-        // 如果是 then 表达式
-        if is_then {
-            last_then_expr = Some(expr);
-
-            let next_expr: Option<&'a mut CallExpr> = {
-                if let Callee::Expr(boxed_callee) = &mut expr.callee {
-                    if let Expr::Member(MemberExpr { obj, .. }) = &mut **boxed_callee {
-                        if let Expr::Call(next_call) = &mut **obj {
-                            Some(next_call)
-                        } else {
-                            None
+                                    obj: Box::new(Expr::Call(call_expr.clone())),
+                                    prop: MemberProp::Ident(IdentName {
+                                        span: DUMMY_SP,
+                                        sym: "catch".into(),
+                                    }),
+                                }))),
+                                args: vec![catch_func.into()],
+                                type_args: None,
+                                span: DUMMY_SP,
+                                ctxt: SyntaxContext::empty(),
+                            };
+                            *call_expr = catch_expr;
                         }
-                    } else {
-                        None
                     }
-                } else {
-                    None
                 }
-            };
-
-            if let Some(next_call) = next_expr {
-                current_expr = Some(next_call);
-                continue;
             }
         }
-
-        // 如果没有下一个 then，结束循环
-        current_expr = None;
     }
-
-    // 返回最后找到的 then
-    last_then_expr
 }
 
+fn get_next_call_expr(call_expr: &mut CallExpr) -> Option<&mut CallExpr> {
+    if let Callee::Expr(boxed_callee) = &mut call_expr.callee {
+        if let Expr::Member(MemberExpr { obj, prop, .. }) = &mut **boxed_callee {
+            if let MemberProp::Ident(IdentName { sym, .. }) = prop {
+                if sym == "then" {
+                    if let Expr::Call(next_call_expr) = &mut **obj {
+                        return Some(next_call_expr);
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+fn has_catch(call_expr: &mut CallExpr) -> bool {
+    let mut current_expr = call_expr;
+    while let Some(next_expr) = get_next_call_expr(current_expr) {
+        if let Callee::Expr(boxed_callee) = &next_expr.callee {
+            if let Expr::Member(MemberExpr { prop, .. }) = &**boxed_callee {
+                if let MemberProp::Ident(IdentName { sym, .. }) = prop {
+                    if sym == "catch" {
+                        return true;
+                    }
+                }
+            }
+        }
+        current_expr = next_expr;
+    }
+    false
+}
 fn create_catch_arrow_func() -> Expr {
     Expr::Arrow(ArrowExpr {
-        params: vec![swc_core::ecma::ast::Pat::Ident(BindingIdent {
+        params: vec![Pat::Ident(BindingIdent {
             id: Ident {
                 span: DUMMY_SP,
                 sym: "err".into(),
@@ -141,16 +101,23 @@ fn create_catch_arrow_func() -> Expr {
             },
             type_ann: None,
         })],
-        body: Box::new(swc_core::ecma::ast::BlockStmtOrExpr::BlockStmt(BlockStmt {
+        body: Box::new(BlockStmtOrExpr::BlockStmt(BlockStmt {
             span: DUMMY_SP,
             stmts: vec![Stmt::Expr(ExprStmt {
                 span: DUMMY_SP,
                 expr: Box::new(Expr::Call(CallExpr {
-                    callee: Callee::Expr(Box::new(Expr::Ident(Ident {
+                    callee: Callee::Expr(Box::new(Expr::Member(MemberExpr {
                         span: DUMMY_SP,
-                        sym: "console".into(),
-                        optional: false,
-                        ctxt: SyntaxContext::empty(),
+                        obj: Box::new(Expr::Ident(Ident {
+                            span: DUMMY_SP,
+                            sym: "console".into(),
+                            optional: false,
+                            ctxt: SyntaxContext::empty(),
+                        })),
+                        prop: MemberProp::Ident(IdentName {
+                            span: DUMMY_SP,
+                            sym: "error".into(),
+                        }),
                     }))),
                     args: vec![ExprOrSpread {
                         spread: None,
