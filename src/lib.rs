@@ -1,3 +1,5 @@
+use std::vec;
+
 use swc_common::SyntaxContext;
 use swc_core::common::{Span, DUMMY_SP};
 use swc_core::ecma::ast;
@@ -18,15 +20,33 @@ use async_tool::{already_wrapped, wrap_arrow_body_with_try_catch, wrap_with_try_
 use new_date_tool::create_new_regex_call;
 use promise_tool::{create_new_catch_callee, has_catch};
 
-pub struct TransformVisitor;
+pub struct TransformVisitor {
+    pub cache: Vec<String>,
+}
 
 impl TransformVisitor {
     pub fn new() -> Self {
-        TransformVisitor {}
+        TransformVisitor { cache: vec![] }
+    }
+
+    fn cache_push(&mut self, cache: String) {
+        if !self.cache.contains(&cache) {
+            self.cache.push(cache)
+        }
     }
 }
 
 impl VisitMut for TransformVisitor {
+    fn visit_mut_program(&mut self, program: &mut Program) {
+        program.visit_mut_children_with(self);
+        if self.cache.len() > 0 {
+            let new_stmt = create_require_statement(self.cache.clone());
+            if let Program::Module(module) = program {
+                module.body.insert(0, ModuleItem::Stmt(new_stmt));
+            }
+        }
+    }
+
     fn visit_mut_call_expr(&mut self, call_expr: &mut CallExpr) {
         if let Callee::Expr(boxed_callee) = &mut call_expr.callee {
             if let Expr::Member(MemberExpr { prop, .. }) = &mut **boxed_callee {
@@ -89,10 +109,11 @@ impl VisitMut for TransformVisitor {
     }
 
     fn visit_mut_assign_expr(&mut self, assign_expr: &mut AssignExpr) {
-        // Get the replace operator (you'll need to implement push_cache)
         let replace_operator = push_assign_cache(&assign_expr.op);
 
         if replace_operator != "none" {
+            self.cache_push((*replace_operator).to_string());
+
             let left_expr = match &assign_expr.left {
                 AssignTarget::Simple(simple_target) => match simple_target {
                     SimpleAssignTarget::Ident(binding_ident) => {
@@ -160,42 +181,39 @@ impl VisitMut for TransformVisitor {
         assign_expr.visit_mut_children_with(self);
     }
 
-    fn visit_mut_bin_expr(&mut self, e: &mut BinExpr) {
-        println!("Visiting BinExpr {:?}\n\n", e);
-        e.visit_mut_children_with(self);
+    fn visit_mut_expr(&mut self, expr: &mut Expr) {
+        expr.visit_mut_children_with(self);
 
-        let replace_operator = push_bin_cache(&e.op);
-        if replace_operator != "none" {
-            let call_expr = Expr::Call(CallExpr {
-                span: DUMMY_SP,
-                callee: Callee::Expr(Box::new(Expr::Ident(Ident {
+        if let Expr::Bin(bin_expr) = expr {
+            let op = bin_expr.op;
+            let new_op_call = push_bin_cache(&op);
+            if new_op_call != "None" {
+                self.cache_push((&new_op_call).to_string());
+                // 创建一个函数调用表达式来替换二元表达式
+                let new_expr = Expr::Call(CallExpr {
                     span: DUMMY_SP,
-                    sym: replace_operator.into(),
-                    optional: false,
+                    callee: Callee::Expr(Box::new(Expr::Ident(Ident::new(
+                        new_op_call.into(),
+                        DUMMY_SP,
+                        SyntaxContext::empty(),
+                    )))),
+                    args: vec![
+                        ExprOrSpread {
+                            spread: None,
+                            expr: Box::new(*bin_expr.left.take()),
+                        },
+                        ExprOrSpread {
+                            spread: None,
+                            expr: Box::new(*bin_expr.right.take()),
+                        },
+                    ],
+                    type_args: None,
                     ctxt: SyntaxContext::empty(),
-                }))),
-                args: vec![
-                    ExprOrSpread {
-                        spread: None,
-                        expr: Box::new(*e.left.take()),
-                    },
-                    ExprOrSpread {
-                        spread: None,
-                        expr: Box::new(*e.right.take()),
-                    },
-                ],
-                type_args: None,
-                ctxt: SyntaxContext::empty(),
-            });
-            *e = BinExpr {
-                span: DUMMY_SP,
-                op: BinaryOp::EqEq, // 这里设置一个默认值，实际中你可能需要根据情况设置
-                left: Box::new(call_expr),
-                right: Box::new(Expr::Lit(Lit::Bool(Bool {
-                    span: DUMMY_SP,
-                    value: true,
-                }))),
-            };
+                });
+
+                // 替换原有的二元表达式
+                *expr = new_expr;
+            }
         }
     }
 }
@@ -220,6 +238,55 @@ fn push_bin_cache(op: &BinaryOp) -> &'static str {
         _ => "none",
     }
 }
+
+fn create_require_statement(cache: Vec<String>) -> Stmt {
+    Stmt::Decl(Decl::Var(Box::new(VarDecl {
+        span: DUMMY_SP,
+        kind: VarDeclKind::Const,
+        declare: false,
+        decls: vec![VarDeclarator {
+            span: DUMMY_SP,
+            name: Pat::Object(ObjectPat {
+                span: DUMMY_SP,
+                props: cache
+                    .iter()
+                    .map(|x| {
+                        ObjectPatProp::Assign(AssignPatProp {
+                            span: DUMMY_SP,
+                            key: BindingIdent {
+                                id: Ident::new(x.clone().into(), DUMMY_SP, SyntaxContext::empty()),
+                                type_ann: None,
+                            },
+                            value: None,
+                        })
+                    })
+                    .collect(),
+                optional: false,
+                type_ann: None,
+            }),
+            init: Some(Box::new(Expr::Call(CallExpr {
+                span: DUMMY_SP,
+                callee: Callee::Expr(Box::new(Expr::Ident(Ident::new(
+                    "require".into(),
+                    DUMMY_SP,
+                    SyntaxContext::empty(),
+                )))),
+                args: vec![ExprOrSpread {
+                    spread: None,
+                    expr: Box::new(Expr::Lit(Lit::Str(Str {
+                        span: DUMMY_SP,
+                        value: "babel-plugin-accuracy/src/calc.js".into(),
+                        raw: None,
+                    }))),
+                }],
+                type_args: None,
+                ctxt: SyntaxContext::empty(),
+            }))),
+            definite: false,
+        }],
+        ctxt: SyntaxContext::empty(),
+    })))
+}
 /// An example plugin function with macro support.
 /// `plugin_transform` macro interop pointers into deserialized structs, as well
 /// as returning ptr back to host.
@@ -237,5 +304,5 @@ fn push_bin_cache(op: &BinaryOp) -> &'static str {
 /// Refer swc_plugin_macro to see how does it work internally.
 #[plugin_transform]
 pub fn process_transform(program: Program, _metadata: TransformPluginProgramMetadata) -> Program {
-    program.fold_with(&mut as_folder(TransformVisitor))
+    program.fold_with(&mut as_folder(TransformVisitor { cache: vec![] }))
 }

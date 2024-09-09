@@ -1,7 +1,4 @@
-var {
-    accAdd,
-    accCong
-} = require("babel-plugin-accuracy/src/calc.js");
+const { accAdd, accCong } = require("babel-plugin-accuracy/src/calc.js");
 
 function a(b, c) {
     let d = 0;
