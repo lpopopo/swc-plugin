@@ -12,8 +12,10 @@ use swc_core::{
 };
 
 mod async_tool;
+mod new_date_tool;
 mod promise_tool;
 use async_tool::{already_wrapped, wrap_arrow_body_with_try_catch, wrap_with_try_catch};
+use new_date_tool::create_new_regex_call;
 use promise_tool::{create_new_catch_callee, has_catch};
 
 pub struct TransformVisitor;
@@ -82,48 +84,9 @@ impl VisitMut for TransformVisitor {
                 // 检查第一个参数是否存在并且是字符串字面量
                 if let Some(arg) = n.args.as_mut() {
                     if let Some(first_arg) = arg.first_mut() {
-                        if let Expr::Lit(Lit::Str(Str { value, .. })) = &*first_arg.expr {
-                            // 创建替换操作: "str".replace(/-/g, '/')
-                            let replace_call = Expr::Call(CallExpr {
-                                span: DUMMY_SP,
-                                callee: Callee::Expr(Box::new(Expr::Member(
-                                    swc_core::ecma::ast::MemberExpr {
-                                        span: DUMMY_SP,
-                                        obj: Box::new(Expr::Lit(Lit::Str(Str {
-                                            value: value.clone(),
-                                            span: DUMMY_SP,
-                                            raw: None,
-                                        }))),
-                                        prop: MemberProp::Ident(IdentName::new(
-                                            "replace".into(),
-                                            DUMMY_SP,
-                                        )),
-                                    },
-                                ))),
-                                args: vec![
-                                    ExprOrSpread {
-                                        spread: None,
-                                        expr: Box::new(Expr::Lit(Lit::Regex(Regex {
-                                            exp: "-".into(),
-                                            flags: "g".into(),
-                                            span: DUMMY_SP,
-                                        }))),
-                                    },
-                                    ExprOrSpread {
-                                        spread: None,
-                                        expr: Box::new(Expr::Lit(Lit::Str(Str {
-                                            value: "/".into(),
-                                            span: DUMMY_SP,
-                                            raw: None,
-                                        }))),
-                                    },
-                                ],
-                                type_args: None,
-                                ctxt: SyntaxContext::empty(),
-                            });
-
-                            // 将第一个参数替换为 .replace(/-/g, '/')
-                            first_arg.expr = Box::new(replace_call);
+                        if let Expr::Lit(Lit::Str(Str { value, .. })) = &mut *first_arg.expr {
+                            let value_clone = value.clone();
+                            create_new_regex_call(&mut first_arg.expr, value_clone);
                         }
                     }
                 }
