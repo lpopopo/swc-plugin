@@ -1,8 +1,7 @@
 use std::vec;
 
 use swc_common::SyntaxContext;
-use swc_core::common::{Span, DUMMY_SP};
-use swc_core::ecma::ast;
+use swc_core::common::DUMMY_SP;
 use swc_core::ecma::atoms::JsWord;
 use swc_core::{
     common::util::take::Take,
