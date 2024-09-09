@@ -74,6 +74,64 @@ impl VisitMut for TransformVisitor {
         wrap_arrow_body_with_try_catch(node);
         node.visit_mut_children_with(self);
     }
+
+    fn visit_mut_new_expr(&mut self, n: &mut NewExpr) {
+        // 检查是否是 new Date()
+        if let Expr::Ident(ident) = &*n.callee {
+            if ident.sym == JsWord::new("Date") {
+                // 检查第一个参数是否存在并且是字符串字面量
+                if let Some(arg) = n.args.as_mut() {
+                    if let Some(first_arg) = arg.first_mut() {
+                        if let Expr::Lit(Lit::Str(Str { value, .. })) = &*first_arg.expr {
+                            // 创建替换操作: "str".replace(/-/g, '/')
+                            let replace_call = Expr::Call(CallExpr {
+                                span: DUMMY_SP,
+                                callee: Callee::Expr(Box::new(Expr::Member(
+                                    swc_core::ecma::ast::MemberExpr {
+                                        span: DUMMY_SP,
+                                        obj: Box::new(Expr::Lit(Lit::Str(Str {
+                                            value: value.clone(),
+                                            span: DUMMY_SP,
+                                            raw: None,
+                                        }))),
+                                        prop: MemberProp::Ident(IdentName::new(
+                                            "replace".into(),
+                                            DUMMY_SP,
+                                        )),
+                                    },
+                                ))),
+                                args: vec![
+                                    ExprOrSpread {
+                                        spread: None,
+                                        expr: Box::new(Expr::Lit(Lit::Regex(Regex {
+                                            exp: "-".into(),
+                                            flags: "g".into(),
+                                            span: DUMMY_SP,
+                                        }))),
+                                    },
+                                    ExprOrSpread {
+                                        spread: None,
+                                        expr: Box::new(Expr::Lit(Lit::Str(Str {
+                                            value: "/".into(),
+                                            span: DUMMY_SP,
+                                            raw: None,
+                                        }))),
+                                    },
+                                ],
+                                type_args: None,
+                                ctxt: SyntaxContext::empty(),
+                            });
+
+                            // 将第一个参数替换为 .replace(/-/g, '/')
+                            first_arg.expr = Box::new(replace_call);
+                        }
+                    }
+                }
+            }
+        }
+        // 继续遍历其他节点
+        n.visit_mut_children_with(self);
+    }
 }
 
 /// An example plugin function with macro support.
