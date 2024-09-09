@@ -26,32 +26,77 @@ impl TransformVisitor {
 
 impl VisitMut for TransformVisitor {
     fn visit_mut_call_expr(&mut self, call_expr: &mut CallExpr) {
-        call_expr.visit_mut_children_with(self);
-
         if let Callee::Expr(boxed_callee) = &mut call_expr.callee {
-            if let Expr::Member(MemberExpr { obj, prop, .. }) = &mut **boxed_callee {
+            if let Expr::Member(MemberExpr { prop, .. }) = &mut **boxed_callee {
                 if let MemberProp::Ident(IdentName { sym, .. }) = prop {
-                    if let Expr::Call(next_call_expr) = &mut **obj {
-                        println!("next_call_expr   {:?}========>\n\n", next_call_expr);
-                        if sym == "then" && !Some(next_call_expr).is_some() {
-                            let catch_func = create_catch_arrow_func();
-
-                            let catch_expr = CallExpr {
+                    if sym == "then" && !has_catch(call_expr) {
+                        // Create the console.error(err) statement
+                        let console_error_stmt = Stmt::Expr(ExprStmt {
+                            expr: Box::new(Expr::Call(CallExpr {
+                                span: DUMMY_SP,
                                 callee: Callee::Expr(Box::new(Expr::Member(MemberExpr {
                                     span: DUMMY_SP,
-                                    obj: Box::new(Expr::Call(call_expr.clone())),
-                                    prop: MemberProp::Ident(IdentName {
-                                        span: DUMMY_SP,
-                                        sym: "catch".into(),
-                                    }),
+                                    obj: Box::new(Expr::Ident(Ident::new(
+                                        "console".into(),
+                                        DUMMY_SP,
+                                        SyntaxContext::empty(),
+                                    ))),
+                                    prop: MemberProp::Ident(IdentName::new(
+                                        "error".into(),
+                                        DUMMY_SP,
+                                    )),
                                 }))),
-                                args: vec![catch_func.into()],
+                                args: vec![ExprOrSpread {
+                                    spread: None,
+                                    expr: Box::new(Expr::Ident(Ident::new(
+                                        "err".into(),
+                                        DUMMY_SP,
+                                        SyntaxContext::empty(),
+                                    ))),
+                                }],
                                 type_args: None,
-                                span: DUMMY_SP,
                                 ctxt: SyntaxContext::empty(),
-                            };
-                            *call_expr = catch_expr;
-                        }
+                            })),
+                            span: DUMMY_SP,
+                        });
+
+                        // Create the arrow function
+                        let arrow_func = Expr::Arrow(ArrowExpr {
+                            span: DUMMY_SP,
+                            params: vec![Pat::Ident(BindingIdent::from(Ident::new(
+                                "err".into(),
+                                DUMMY_SP,
+                                SyntaxContext::empty(),
+                            )))],
+                            body: Box::new(BlockStmtOrExpr::BlockStmt(BlockStmt {
+                                span: DUMMY_SP,
+                                stmts: vec![console_error_stmt],
+                                ctxt: SyntaxContext::empty(),
+                            })),
+                            is_async: false,
+                            is_generator: false,
+                            type_params: None,
+                            return_type: None,
+                            ctxt: SyntaxContext::empty(),
+                        });
+
+                        // Create the new function call with .catch
+                        let new_func = CallExpr {
+                            span: DUMMY_SP,
+                            callee: Callee::Expr(Box::new(Expr::Member(MemberExpr {
+                                span: DUMMY_SP,
+                                obj: Box::new(Expr::Call(call_expr.clone())),
+                                prop: MemberProp::Ident(IdentName::new("catch".into(), DUMMY_SP)),
+                            }))),
+                            args: vec![ExprOrSpread {
+                                spread: None,
+                                expr: Box::new(arrow_func),
+                            }],
+                            type_args: None,
+                            ctxt: SyntaxContext::empty(),
+                        };
+
+                        *call_expr = new_func;
                     }
                 }
             }
@@ -75,11 +120,13 @@ fn get_next_call_expr(call_expr: &mut CallExpr) -> Option<&mut CallExpr> {
 }
 
 fn has_catch(call_expr: &mut CallExpr) -> bool {
+    // println!("call_expr: {:?}\n\n", call_expr);
     let mut current_expr = call_expr;
     while let Some(next_expr) = get_next_call_expr(current_expr) {
         if let Callee::Expr(boxed_callee) = &next_expr.callee {
             if let Expr::Member(MemberExpr { prop, .. }) = &**boxed_callee {
                 if let MemberProp::Ident(IdentName { sym, .. }) = prop {
+                    println!("sym: {}\n\n", sym);
                     if sym == "catch" {
                         return true;
                     }
@@ -142,6 +189,17 @@ fn create_catch_arrow_func() -> Expr {
         span: DUMMY_SP,
         ctxt: SyntaxContext::empty(),
     })
+}
+
+fn is_then_chain(call_expr: &CallExpr) -> bool {
+    if let Callee::Expr(callee_expr) = &call_expr.callee {
+        if let Expr::Member(MemberExpr { prop, .. }) = &**callee_expr {
+            if let MemberProp::Ident(IdentName { sym, .. }) = prop {
+                return sym == "then";
+            }
+        }
+    }
+    false
 }
 /// An example plugin function with macro support.
 /// `plugin_transform` macro interop pointers into deserialized structs, as well
