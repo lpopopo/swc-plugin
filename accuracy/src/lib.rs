@@ -127,7 +127,7 @@ impl VisitMut for TransformVisitor {
     fn visit_mut_assign_expr(&mut self, assign_expr: &mut AssignExpr) {
         let replace_operator = push_assign_cache(&assign_expr.op);
 
-        if replace_operator != "none" {
+        if replace_operator != "None" {
             self.cache_push((*replace_operator).to_string());
             create_assign_expr(
                 assign_expr.left.clone(),

@@ -141,7 +141,7 @@ pub fn push_assign_cache(op: &AssignOp) -> &'static str {
         AssignOp::SubAssign => "accSub",
         AssignOp::MulAssign => "accMul",
         AssignOp::DivAssign => "accDiv",
-        _ => "none",
+        _ => "None",
     }
 }
 
@@ -152,6 +152,6 @@ pub fn push_bin_cache(op: &BinaryOp) -> &'static str {
         BinaryOp::Mul => "accMul",
         BinaryOp::Div => "accDiv",
         BinaryOp::EqEqEq => "accCong",
-        _ => "none",
+        _ => "None",
     }
 }
