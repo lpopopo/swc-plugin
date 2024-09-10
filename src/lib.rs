@@ -1,10 +1,6 @@
 use std::vec;
-
-use swc_common::SyntaxContext;
-use swc_core::common::DUMMY_SP;
 use swc_core::ecma::atoms::JsWord;
 use swc_core::{
-    common::util::take::Take,
     ecma::{
         ast::*,
         visit::{as_folder, FoldWith, VisitMut, VisitMutWith},
@@ -14,9 +10,14 @@ use swc_core::{
 
 mod async_tool;
 mod new_date_tool;
+mod opration_tool;
 mod promise_tool;
 use async_tool::{already_wrapped, wrap_arrow_body_with_try_catch, wrap_with_try_catch};
 use new_date_tool::create_new_regex_call;
+use opration_tool::{
+    create_assign_expr, create_new_bin_call, create_require_statement, push_assign_cache,
+    push_bin_cache,
+};
 use promise_tool::{create_new_catch_callee, has_catch};
 
 pub struct TransformVisitor {
@@ -112,68 +113,12 @@ impl VisitMut for TransformVisitor {
 
         if replace_operator != "none" {
             self.cache_push((*replace_operator).to_string());
-
-            let left_expr = match &assign_expr.left {
-                AssignTarget::Simple(simple_target) => match simple_target {
-                    SimpleAssignTarget::Ident(binding_ident) => {
-                        Box::new(Expr::Ident(binding_ident.id.clone()))
-                    }
-                    SimpleAssignTarget::Member(member_expr) => {
-                        Box::new(Expr::Member(member_expr.clone()))
-                    }
-                    SimpleAssignTarget::SuperProp(super_prop_expr) => {
-                        Box::new(Expr::SuperProp(super_prop_expr.clone()))
-                    }
-                    SimpleAssignTarget::Paren(paren_expr) => {
-                        Box::new(Expr::Paren(paren_expr.clone()))
-                    }
-                    SimpleAssignTarget::OptChain(opt_chain_expr) => {
-                        Box::new(Expr::OptChain(opt_chain_expr.clone()))
-                    }
-                    SimpleAssignTarget::TsAs(ts_as_expr) => {
-                        Box::new(Expr::TsAs(ts_as_expr.clone()))
-                    }
-                    SimpleAssignTarget::TsSatisfies(ts_satisfies_expr) => {
-                        Box::new(Expr::TsSatisfies(ts_satisfies_expr.clone()))
-                    }
-                    SimpleAssignTarget::TsNonNull(ts_non_null_expr) => {
-                        Box::new(Expr::TsNonNull(ts_non_null_expr.clone()))
-                    }
-                    SimpleAssignTarget::TsTypeAssertion(ts_type_assertion) => {
-                        Box::new(Expr::TsTypeAssertion(ts_type_assertion.clone()))
-                    }
-                    SimpleAssignTarget::TsInstantiation(ts_instantiation) => {
-                        Box::new(Expr::TsInstantiation(ts_instantiation.clone()))
-                    }
-                    SimpleAssignTarget::Invalid(_) => return, // 如果是无效的，我们不处理
-                },
-                AssignTarget::Pat(_) => return, // 如果是模式匹配，我们不处理
-            };
-            // Create the new call expression
-            let new_right = Expr::Call(CallExpr {
-                span: DUMMY_SP,
-                callee: Callee::Expr(Box::new(Expr::Ident(Ident::new(
-                    replace_operator.into(),
-                    DUMMY_SP,
-                    SyntaxContext::empty(),
-                )))),
-                args: vec![
-                    ExprOrSpread {
-                        spread: None,
-                        expr: left_expr,
-                    },
-                    ExprOrSpread {
-                        spread: None,
-                        expr: assign_expr.right.clone(),
-                    },
-                ],
-                type_args: None,
-                ctxt: SyntaxContext::empty(),
-            });
-
-            // Update the assignment expression
-            assign_expr.right = Box::new(new_right);
-            assign_expr.op = AssignOp::Assign;
+            create_assign_expr(
+                assign_expr.left.clone(),
+                assign_expr.right.clone(),
+                assign_expr,
+                &replace_operator,
+            );
         }
 
         // Continue visiting the node
@@ -189,27 +134,7 @@ impl VisitMut for TransformVisitor {
             if new_op_call != "None" {
                 self.cache_push((&new_op_call).to_string());
                 // 创建一个函数调用表达式来替换二元表达式
-                let new_expr = Expr::Call(CallExpr {
-                    span: DUMMY_SP,
-                    callee: Callee::Expr(Box::new(Expr::Ident(Ident::new(
-                        new_op_call.into(),
-                        DUMMY_SP,
-                        SyntaxContext::empty(),
-                    )))),
-                    args: vec![
-                        ExprOrSpread {
-                            spread: None,
-                            expr: Box::new(*bin_expr.left.take()),
-                        },
-                        ExprOrSpread {
-                            spread: None,
-                            expr: Box::new(*bin_expr.right.take()),
-                        },
-                    ],
-                    type_args: None,
-                    ctxt: SyntaxContext::empty(),
-                });
-
+                let new_expr = create_new_bin_call(new_op_call, bin_expr);
                 // 替换原有的二元表达式
                 *expr = new_expr;
             }
@@ -217,90 +142,6 @@ impl VisitMut for TransformVisitor {
     }
 }
 
-fn push_assign_cache(op: &AssignOp) -> &'static str {
-    match op {
-        AssignOp::AddAssign => "accAdd",
-        AssignOp::SubAssign => "accSub",
-        AssignOp::MulAssign => "accMul",
-        AssignOp::DivAssign => "accDiv",
-        _ => "none",
-    }
-}
-
-fn push_bin_cache(op: &BinaryOp) -> &'static str {
-    match op {
-        BinaryOp::Add => "accAdd",
-        BinaryOp::Sub => "accSub",
-        BinaryOp::Mul => "accMul",
-        BinaryOp::Div => "accDiv",
-        BinaryOp::EqEqEq => "accCong",
-        _ => "none",
-    }
-}
-
-fn create_require_statement(cache: Vec<String>) -> Stmt {
-    Stmt::Decl(Decl::Var(Box::new(VarDecl {
-        span: DUMMY_SP,
-        kind: VarDeclKind::Const,
-        declare: false,
-        decls: vec![VarDeclarator {
-            span: DUMMY_SP,
-            name: Pat::Object(ObjectPat {
-                span: DUMMY_SP,
-                props: cache
-                    .iter()
-                    .map(|x| {
-                        ObjectPatProp::Assign(AssignPatProp {
-                            span: DUMMY_SP,
-                            key: BindingIdent {
-                                id: Ident::new(x.clone().into(), DUMMY_SP, SyntaxContext::empty()),
-                                type_ann: None,
-                            },
-                            value: None,
-                        })
-                    })
-                    .collect(),
-                optional: false,
-                type_ann: None,
-            }),
-            init: Some(Box::new(Expr::Call(CallExpr {
-                span: DUMMY_SP,
-                callee: Callee::Expr(Box::new(Expr::Ident(Ident::new(
-                    "require".into(),
-                    DUMMY_SP,
-                    SyntaxContext::empty(),
-                )))),
-                args: vec![ExprOrSpread {
-                    spread: None,
-                    expr: Box::new(Expr::Lit(Lit::Str(Str {
-                        span: DUMMY_SP,
-                        value: "babel-plugin-accuracy/src/calc.js".into(),
-                        raw: None,
-                    }))),
-                }],
-                type_args: None,
-                ctxt: SyntaxContext::empty(),
-            }))),
-            definite: false,
-        }],
-        ctxt: SyntaxContext::empty(),
-    })))
-}
-/// An example plugin function with macro support.
-/// `plugin_transform` macro interop pointers into deserialized structs, as well
-/// as returning ptr back to host.
-///
-/// It is possible to opt out from macro by writing transform fn manually
-/// if plugin need to handle low-level ptr directly via
-/// `__transform_plugin_process_impl(
-///     ast_ptr: *const u8, ast_ptr_len: i32,
-///     unresolved_mark: u32, should_enable_comments_proxy: i32) ->
-///     i32 /*  0 for success, fail otherwise.
-///             Note this is only for internal pointer interop result,
-///             not actual transform result */`
-///
-/// This requires manual handling of serialization / deserialization from ptrs.
-/// Refer swc_plugin_macro to see how does it work internally.
 #[plugin_transform]
 pub fn process_transform(program: Program, _metadata: TransformPluginProgramMetadata) -> Program {
     program.fold_with(&mut as_folder(TransformVisitor { cache: vec![] }))
