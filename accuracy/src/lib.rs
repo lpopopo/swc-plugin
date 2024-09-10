@@ -22,11 +22,16 @@ use promise_tool::{create_new_catch_callee, has_catch};
 
 pub struct TransformVisitor {
     pub cache: Vec<String>,
+
+    pub has_polyfill_tag: bool,
 }
 
 impl TransformVisitor {
     pub fn new() -> Self {
-        TransformVisitor { cache: vec![] }
+        TransformVisitor {
+            cache: vec![],
+            has_polyfill_tag: false,
+        }
     }
 
     fn cache_push(&mut self, cache: String) {
@@ -38,6 +43,19 @@ impl TransformVisitor {
 
 impl VisitMut for TransformVisitor {
     fn visit_mut_program(&mut self, program: &mut Program) {
+        /*
+         * 判断当前文件开头是否存在'calc polyfill'
+         * 是则不处理这个文件
+         */
+        if let Program::Module(module) = program {
+            if let Some(ModuleItem::Stmt(Stmt::Expr(ExprStmt { expr, .. }))) = module.body.get(0) {
+                if let Expr::Lit(Lit::Str(Str { value, .. })) = &**expr {
+                    if value == "calc polyfill" {
+                        return;
+                    }
+                }
+            }
+        }
         program.visit_mut_children_with(self);
         if self.cache.len() > 0 {
             let new_stmt = create_require_statement(self.cache.clone());
@@ -67,8 +85,6 @@ impl VisitMut for TransformVisitor {
                 }
             }
         }
-
-        // Continue visiting the node
         node.visit_mut_children_with(self);
     }
 
@@ -144,5 +160,8 @@ impl VisitMut for TransformVisitor {
 
 #[plugin_transform]
 pub fn process_transform(program: Program, _metadata: TransformPluginProgramMetadata) -> Program {
-    program.fold_with(&mut as_folder(TransformVisitor { cache: vec![] }))
+    program.fold_with(&mut as_folder(TransformVisitor {
+        cache: vec![],
+        has_polyfill_tag: false,
+    }))
 }
