@@ -48,7 +48,6 @@ impl TransformVisitor {
 
 impl VisitMut for TransformVisitor {
     fn visit_mut_program(&mut self, program: &mut Program) {
-        println!("parse config is {}", self.parse_config);
         /*
          * 判断当前文件开头是否存在'calc polyfill'
          * 是则不处理这个文件
@@ -193,6 +192,10 @@ pub fn process_transform(program: Program, _metadata: TransformPluginProgramMeta
     program.fold_with(&mut as_folder(TransformVisitor {
         cache: vec![],
         has_polyfill_tag: false,
-        parse_config: parse_config,
+        parse_config: Config {
+            add_async_try: parse_config.add_async_try,
+            promise_catch: parse_config.promise_catch,
+            check_chong: parse_config.check_chong,
+        },
     }))
 }

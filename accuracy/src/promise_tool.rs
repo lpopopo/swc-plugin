@@ -7,7 +7,6 @@ pub fn has_catch(call_expr: &mut CallExpr) -> bool {
         if let Callee::Expr(boxed_callee) = &next_expr.callee {
             if let Expr::Member(MemberExpr { prop, .. }) = &**boxed_callee {
                 if let MemberProp::Ident(IdentName { sym, .. }) = prop {
-                    println!("sym: {}\n\n", sym);
                     if sym == "catch" {
                         return true;
                     }
