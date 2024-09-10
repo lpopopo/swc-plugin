@@ -122,7 +122,7 @@ pub fn create_require_statement(cache: Vec<String>) -> Stmt {
                     spread: None,
                     expr: Box::new(Expr::Lit(Lit::Str(Str {
                         span: DUMMY_SP,
-                        value: "babel-plugin-accuracy/src/calc.js".into(),
+                        value: "swc-plugin-accuracy/src/calc.js".into(),
                         raw: None,
                     }))),
                 }],

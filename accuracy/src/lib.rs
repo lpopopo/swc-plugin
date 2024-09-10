@@ -9,10 +9,12 @@ use swc_core::{
 };
 
 mod async_tool;
+mod config;
 mod new_date_tool;
 mod opration_tool;
 mod promise_tool;
 use async_tool::{already_wrapped, wrap_arrow_body_with_try_catch, wrap_with_try_catch};
+use config::{parse_config, Config};
 use new_date_tool::create_new_regex_call;
 use opration_tool::{
     create_assign_expr, create_new_bin_call, create_require_statement, push_assign_cache,
@@ -23,6 +25,8 @@ use promise_tool::{create_new_catch_callee, has_catch};
 pub struct TransformVisitor {
     pub cache: Vec<String>,
 
+    pub parse_config: Config,
+
     pub has_polyfill_tag: bool,
 }
 
@@ -31,6 +35,7 @@ impl TransformVisitor {
         TransformVisitor {
             cache: vec![],
             has_polyfill_tag: false,
+            parse_config: Config::default(),
         }
     }
 
@@ -43,6 +48,7 @@ impl TransformVisitor {
 
 impl VisitMut for TransformVisitor {
     fn visit_mut_program(&mut self, program: &mut Program) {
+        println!("parse config is {}", self.parse_config);
         /*
          * 判断当前文件开头是否存在'calc polyfill'
          * 是则不处理这个文件
@@ -66,6 +72,10 @@ impl VisitMut for TransformVisitor {
     }
 
     fn visit_mut_call_expr(&mut self, call_expr: &mut CallExpr) {
+        if !self.parse_config.promise_catch {
+            /*配置不需要处理 */
+            return;
+        }
         if let Callee::Expr(boxed_callee) = &mut call_expr.callee {
             if let Expr::Member(MemberExpr { prop, .. }) = &mut **boxed_callee {
                 if let MemberProp::Ident(IdentName { sym, .. }) = prop {
@@ -78,6 +88,9 @@ impl VisitMut for TransformVisitor {
     }
 
     fn visit_mut_fn_decl(&mut self, node: &mut FnDecl) {
+        if !self.parse_config.add_async_try {
+            return;
+        }
         if node.function.is_async {
             if let Some(body) = &mut node.function.body {
                 if !already_wrapped(body) {
@@ -89,6 +102,9 @@ impl VisitMut for TransformVisitor {
     }
 
     fn visit_mut_fn_expr(&mut self, node: &mut FnExpr) {
+        if !self.parse_config.add_async_try {
+            return;
+        }
         if node.function.is_async {
             if let Some(body) = &mut node.function.body {
                 if !already_wrapped(body) {
@@ -101,6 +117,9 @@ impl VisitMut for TransformVisitor {
     }
 
     fn visit_mut_arrow_expr(&mut self, node: &mut ArrowExpr) {
+        if !self.parse_config.add_async_try {
+            return;
+        }
         wrap_arrow_body_with_try_catch(node);
         node.visit_mut_children_with(self);
     }
@@ -128,6 +147,9 @@ impl VisitMut for TransformVisitor {
         let replace_operator = push_assign_cache(&assign_expr.op);
 
         if replace_operator != "None" {
+            if !self.parse_config.check_chong && replace_operator == "accCong" {
+                return;
+            }
             self.cache_push((*replace_operator).to_string());
             create_assign_expr(
                 assign_expr.left.clone(),
@@ -148,6 +170,9 @@ impl VisitMut for TransformVisitor {
             let op = bin_expr.op;
             let new_op_call = push_bin_cache(&op);
             if new_op_call != "None" {
+                if !self.parse_config.check_chong && new_op_call == "accCong" {
+                    return;
+                }
                 self.cache_push((&new_op_call).to_string());
                 // 创建一个函数调用表达式来替换二元表达式
                 let new_expr = create_new_bin_call(new_op_call, bin_expr);
@@ -160,8 +185,14 @@ impl VisitMut for TransformVisitor {
 
 #[plugin_transform]
 pub fn process_transform(program: Program, _metadata: TransformPluginProgramMetadata) -> Program {
+    let parse_config = parse_config(
+        &_metadata
+            .get_transform_plugin_config()
+            .expect("load plugin config failed"),
+    );
     program.fold_with(&mut as_folder(TransformVisitor {
         cache: vec![],
         has_polyfill_tag: false,
+        parse_config: parse_config,
     }))
 }
