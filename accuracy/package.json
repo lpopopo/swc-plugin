@@ -1,15 +1,18 @@
 {
     "name": "swc-plugin-accuracy",
-    "version": "0.1.0",
+    "version": "0.5.0",
     "description": "",
     "author": "lpopopo",
     "license": "ISC",
     "keywords": ["swc-plugin"],
-    "main": "target/wasm32-wasi/release/accuracy.wasm",
+    "main": "accuracy.wasm",
+    "files": [
+        "lib/",
+        "accuracy.wasm"
+    ],
     "scripts": {
-        "prepack": "cargo build-wasi --release && cp target/wasm32-wasi/release/accuracy.wasm .",
+        "prepack": "cargo  wasm32-wasi --release && cp target/wasm32-wasi/release/accuracy.wasm  .",
         "push": "npm publish",
         "test": "cargo test -- --nocapture"
-    },
-    "files": []
+    }
 }
