@@ -1,10 +1,11 @@
 {
     "name": "swc-plugin-accuracy",
     "version": "1.0.0",
-    "description": "",
+    "description": "swc-loader 插件 提供处理js 计算精度丢失的统一方案",
     "author": "lpopopo",
     "license": "ISC",
-    "keywords": ["swc-plugin"],
+    "keywords": ["swc-plugin" , "accuracy"],
+    "homepage": "https://github.com/lpopopo/swc-plugin",
     "main": "accuracy.wasm",
     "files": [
         "accuracy.wasm",
