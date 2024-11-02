@@ -8,7 +8,7 @@ fn fixture(input: PathBuf) {
     let output = input.parent().unwrap().join("output.js");
     test_fixture(
         Default::default(),
-        &|_t| as_folder(TransformVisitor::new()),
+        &|_t| as_folder(TransformVisitor::new(input.to_str().unwrap().to_string())),
         &input,
         &output,
         Default::default(),

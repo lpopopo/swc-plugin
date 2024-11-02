@@ -1,5 +1,10 @@
 use std::vec;
+extern crate regex;
+use regex::Regex;
+use std::path::PathBuf;
+use swc_common::Spanned;
 use swc_core::ecma::atoms::JsWord;
+use swc_core::plugin::metadata::TransformPluginMetadataContextKind;
 use swc_core::{
     ecma::{
         ast::*,
@@ -21,6 +26,7 @@ use opration_tool::{
     push_bin_cache,
 };
 use promise_tool::{create_new_catch_callee, has_catch};
+use std::fs;
 
 pub struct TransformVisitor {
     pub cache: Vec<String>,
@@ -28,14 +34,20 @@ pub struct TransformVisitor {
     pub parse_config: Config,
 
     pub has_polyfill_tag: bool,
+
+    pub file_name: Option<String>,
+
+    pub modified_vec: Vec<String>,
 }
 
 impl TransformVisitor {
-    pub fn new() -> Self {
+    pub fn new(file_name: String) -> Self {
         TransformVisitor {
             cache: vec![],
             has_polyfill_tag: false,
-            parse_config: Config::default(),
+            parse_config: Config::new(true, true, true),
+            file_name: Some(file_name),
+            modified_vec: Vec::new(),
         }
     }
 
@@ -46,7 +58,11 @@ impl TransformVisitor {
     }
 }
 
+const PUBLIC_FILE_PATH: &str = "swc-acc-result";
+
 impl VisitMut for TransformVisitor {
+    /*************  ✨ Codeium Command ⭐  *************/
+    /******  ffabd3f3-609d-4f5b-a0e9-ae5a33c4523b  *******/
     fn visit_mut_program(&mut self, program: &mut Program) {
         /*
          * 判断当前文件开头是否存在'calc polyfill'
@@ -68,9 +84,28 @@ impl VisitMut for TransformVisitor {
                 module.body.insert(0, ModuleItem::Stmt(new_stmt));
             }
         }
+
+        if !self.modified_vec.is_empty() {
+            if let Some(file_name) = &self.file_name {
+                let re = Regex::new(r"/").unwrap();
+                let sanitized_file_name = re.replace_all(file_name, "_");
+                let mut write_file_path = PathBuf::from("cwd");
+                write_file_path.push(PUBLIC_FILE_PATH);
+                write_file_path.push(sanitized_file_name.to_string() + ".js");
+                if let Err(e) = fs::write(&write_file_path, self.modified_vec.join("\n")) {
+                    eprintln!(
+                        "Failed to write to file: {:?}, error: {}",
+                        write_file_path, e
+                    );
+                }
+            } else {
+                eprintln!("File name is not set");
+            }
+        }
     }
 
     fn visit_mut_call_expr(&mut self, call_expr: &mut CallExpr) {
+        call_expr.visit_mut_children_with(self);
         if !self.parse_config.promise_catch {
             /*配置不需要处理 */
             return;
@@ -87,6 +122,7 @@ impl VisitMut for TransformVisitor {
     }
 
     fn visit_mut_fn_decl(&mut self, node: &mut FnDecl) {
+        node.visit_mut_children_with(self);
         if !self.parse_config.add_async_try {
             return;
         }
@@ -97,30 +133,25 @@ impl VisitMut for TransformVisitor {
                 }
             }
         }
-        node.visit_mut_children_with(self);
     }
 
-    fn visit_mut_fn_expr(&mut self, node: &mut FnExpr) {
-        if !self.parse_config.add_async_try {
-            return;
-        }
-        if node.function.is_async {
-            if let Some(body) = &mut node.function.body {
-                if !already_wrapped(body) {
-                    wrap_with_try_catch(body);
-                }
-            }
-        }
-
-        node.visit_mut_children_with(self);
-    }
+    // fn visit_mut_fn_expr(&mut self, node: &mut FnExpr) {
+    //     if node.function.is_async {
+    //         if let Some(body) = &mut node.function.body {
+    //             if !already_wrapped(body) && self.parse_config.add_async_try {
+    //                 wrap_with_try_catch(body);
+    //             }
+    //         }
+    //     }
+    //     node.visit_mut_children_with(self);
+    // }
 
     fn visit_mut_arrow_expr(&mut self, node: &mut ArrowExpr) {
+        node.visit_mut_children_with(self);
         if !self.parse_config.add_async_try {
             return;
         }
         wrap_arrow_body_with_try_catch(node);
-        node.visit_mut_children_with(self);
     }
 
     fn visit_mut_new_expr(&mut self, n: &mut NewExpr) {
@@ -149,6 +180,10 @@ impl VisitMut for TransformVisitor {
             if !self.parse_config.check_chong && replace_operator == "accCong" {
                 return;
             }
+            let start = assign_expr.span.lo.0 as usize;
+            let end = assign_expr.span.hi.0 as usize;
+            let formatted_string = format!("operation:{},{}", &assign_expr.op, replace_operator);
+            self.modified_vec.push(formatted_string);
             self.cache_push((*replace_operator).to_string());
             create_assign_expr(
                 assign_expr.left.clone(),
@@ -162,9 +197,18 @@ impl VisitMut for TransformVisitor {
         assign_expr.visit_mut_children_with(self);
     }
 
+    fn visit_mut_bin_expr(&mut self, bin_expr: &mut BinExpr) {
+        if let BinaryOp::Add = bin_expr.op {
+            println!("Found a + operator!");
+        }
+
+        // 继续遍历子节点
+        bin_expr.left.visit_mut_with(self);
+        bin_expr.right.visit_mut_with(self);
+    }
+
     fn visit_mut_expr(&mut self, expr: &mut Expr) {
         expr.visit_mut_children_with(self);
-
         if let Expr::Bin(bin_expr) = expr {
             let op = bin_expr.op;
             let new_op_call = push_bin_cache(&op);
@@ -172,6 +216,10 @@ impl VisitMut for TransformVisitor {
                 if !self.parse_config.check_chong && new_op_call == "accCong" {
                     return;
                 }
+                let start = bin_expr.span.lo.0 as usize;
+                let end = bin_expr.span.hi.0 as usize;
+                let formatted_string = format!("operation:{},{}", op.to_string(), new_op_call);
+                self.modified_vec.push(formatted_string);
                 self.cache_push((&new_op_call).to_string());
                 // 创建一个函数调用表达式来替换二元表达式
                 let new_expr = create_new_bin_call(new_op_call, bin_expr);
@@ -189,9 +237,15 @@ pub fn process_transform(program: Program, _metadata: TransformPluginProgramMeta
             .get_transform_plugin_config()
             .expect("load plugin config failed"),
     );
+    let filepath = match _metadata.get_context(&TransformPluginMetadataContextKind::Filename) {
+        Some(s) => s,
+        None => String::from(""),
+    };
     program.fold_with(&mut as_folder(TransformVisitor {
         cache: vec![],
         has_polyfill_tag: false,
+        file_name: Some(filepath),
+        modified_vec: Vec::new(),
         parse_config: Config {
             add_async_try: parse_config.add_async_try,
             promise_catch: parse_config.promise_catch,
