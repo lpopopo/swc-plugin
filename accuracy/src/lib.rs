@@ -35,7 +35,7 @@ impl TransformVisitor {
         TransformVisitor {
             cache: vec![],
             has_polyfill_tag: false,
-            parse_config: Config::default(),
+            parse_config: Config::new(true, true, true),
         }
     }
 
@@ -70,29 +70,24 @@ impl VisitMut for TransformVisitor {
         }
     }
 
-    fn visit_mut_call_expr(&mut self, call_expr: &mut CallExpr) {
-        if !self.parse_config.promise_catch {
-            /*配置不需要处理 */
-            return;
-        }
-        if let Callee::Expr(boxed_callee) = &mut call_expr.callee {
-            if let Expr::Member(MemberExpr { prop, .. }) = &mut **boxed_callee {
-                if let MemberProp::Ident(IdentName { sym, .. }) = prop {
-                    if sym == "then" && !has_catch(call_expr) {
-                        create_new_catch_callee(call_expr);
-                    }
-                }
-            }
-        }
-    }
+    // fn visit_mut_call_expr(&mut self, call_expr: &mut CallExpr) {
+    //     if let Callee::Expr(boxed_callee) = &mut call_expr.callee {
+    //         if let Expr::Member(MemberExpr { prop, .. }) = &mut **boxed_callee {
+    //             if let MemberProp::Ident(IdentName { sym, .. }) = prop {
+    //                 if sym == "then" && !has_catch(call_expr) && self.parse_config.promise_catch {
+    //                     create_new_catch_callee(call_expr);
+    //                     return;
+    //                 }
+    //             }
+    //         }
+    //     }
+    //     call_expr.visit_mut_children_with(self);
+    // }
 
     fn visit_mut_fn_decl(&mut self, node: &mut FnDecl) {
-        if !self.parse_config.add_async_try {
-            return;
-        }
         if node.function.is_async {
             if let Some(body) = &mut node.function.body {
-                if !already_wrapped(body) {
+                if !already_wrapped(body) && self.parse_config.add_async_try {
                     wrap_with_try_catch(body);
                 }
             }

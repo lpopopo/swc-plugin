@@ -1,4 +1,4 @@
-const { accDiv, accCong } = require("babel-plugin-accuracy/src/calc.js");
+const { accDiv, accCong } = require("swc-plugin-accuracy/lib/calc.js");
 
 function a(b, c) {
     const d = accDiv(0.1, 0.4);
